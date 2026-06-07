@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GitHub Profile Insights Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen font-sans" onload="loadSearchHistory()">
+
+    <div class="container mx-auto px-4 py-8 max-w-6xl">
+        <header class="text-center mb-12">
+            <h1 class="text-4xl font-extrabold tracking-tight bg-gradient-to-r from-blue-400 to-indigo-500 bg-clip-text text-transparent mb-2">
+                <i class="fa-brands fa-github text-slate-100 mr-2"></i>GitHub Profile Analyzer
+            </h1>
+            <p class="text-slate-400">Automated insight tracking & local MySQL archiving engine</p>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            
+            <div class="bg-slate-800 p-6 rounded-2xl shadow-xl border border-slate-700 max-h-[600px] flex flex-col">
+                <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                    <i class="fa-solid fa-history text-indigo-400"></i> Recent Discoveries
+                </h3>
+                <div id="historyList" class="space-y-3 overflow-y-auto flex-grow pr-1 text-sm">
+                    <p class="text-slate-500 italic">Loading database cache history...</p>
+                </div>
+            </div>
+
+            <div class="lg:col-span-2 space-y-6">
+                <div class="bg-slate-800 p-6 rounded-2xl shadow-xl border border-slate-700">
+                    <div class="flex flex-col sm:flex-row gap-4">
+                        <div class="relative flex-grow">
+                            <span class="absolute inset-y-0 left-0 flex items-center pl-4 text-slate-400">
+                                <i class="fa-solid fa-user"></i>
+                            </span>
+                            <input type="text" id="usernameInput" placeholder="Enter GitHub username (e.g., DevRaaz-creator)" 
+                                   class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-11 pr-4 py-3 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors">
+                        </div>
+                        <button onclick="analyzeProfile()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold px-6 py-3 rounded-xl transition-all shadow-lg flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-wand-magic-sparkles"></i> Analyze
+                        </button>
+                    </div>
+                    <div id="statusMessage" class="hidden mt-4 text-sm font-medium"></div>
+                </div>
+
+                <div id="resultCard" class="hidden bg-slate-800 rounded-2xl shadow-xl border border-slate-700 overflow-hidden transition-all duration-300">
+                    <div class="p-8">
+                        <div class="flex flex-col md:flex-row items-center gap-6 mb-6 pb-6 border-b border-slate-700">
+                            <div class="w-24 h-24 bg-gradient-to-tr from-blue-500 to-indigo-600 rounded-full flex items-center justify-center text-4xl font-bold border-2 border-indigo-400 shadow-md">
+                                <i class="fa-solid fa-code text-white"></i>
+                            </div>
+                            <div class="text-center md:text-left flex-grow">
+                                <h2 id="profileName" class="text-2xl font-bold text-white flex flex-wrap items-center justify-center md:justify-start gap-2">Profile Name</h2>
+                                <p id="profileHandle" class="text-indigo-400 font-mono text-sm mb-2">@username</p>
+                                <p id="profileBio" class="text-slate-300 italic text-sm">No profile bio available.</p>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <div class="bg-slate-900/50 p-4 rounded-xl border border-slate-700/50 text-center">
+                                <span class="block text-slate-400 text-xs font-semibold uppercase tracking-wider mb-1">Repositories</span>
+                                <span id="statRepos" class="text-2xl font-bold text-white">0</span>
+                            </div>
+                            <div class="bg-slate-900/50 p-4 rounded-xl border border-slate-700/50 text-center">
+                                <span class="block text-slate-400 text-xs font-semibold uppercase tracking-wider mb-1">Followers</span>
+                                <span id="statFollowers" class="text-2xl font-bold text-white">0</span>
+                            </div>
+                            <div class="bg-slate-900/50 p-4 rounded-xl border border-slate-700/50 text-center">
+                                <span class="block text-slate-400 text-xs font-semibold uppercase tracking-wider mb-1">Following</span>
+                                <span id="statFollowing" class="text-2xl font-bold text-white">0</span>
+                            </div>
+                            <div class="bg-slate-900/50 p-4 rounded-xl border border-slate-700/50 text-center">
+                                <span class="block text-slate-400 text-xs font-semibold uppercase tracking-wider mb-1">Total Stars</span>
+                                <span id="statStars" class="text-2xl font-bold text-indigo-400">⭐ 0</span>
+                            </div>
+                        </div>
+
+                        <div class="mt-6 p-4 bg-slate-900/40 border border-slate-700/60 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-2">
+                            <span class="text-sm font-medium text-slate-400"><i class="fa-solid fa-layer-group text-indigo-400 mr-2"></i>Primary Languages:</span>
+                            <span id="statLanguages" class="text-sm font-semibold text-white bg-slate-800 px-3 py-1 rounded-md border border-slate-600">None detected</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        // Fetch and load stored cache rows from MySQL into view sidebar matrix configurations
+        async function loadSearchHistory() {
+            try {
+                const response = await fetch('/api/profiles');
+                const result = await response.json();
+                const historyList = document.getElementById('historyList');
+                
+                const profiles = Array.isArray(result) ? result : (result.data || []);
+
+                if (!profiles || profiles.length === 0) {
+                    historyList.innerHTML = `<p class="text-slate-500 italic p-2">No profiles stored in MySQL yet.</p>`;
+                    return;
+                }
+
+                historyList.innerHTML = profiles.map(profile => `
+                    <div class="flex items-center justify-between p-3 bg-slate-900/60 border border-slate-700/50 rounded-xl hover:border-indigo-500 hover:bg-slate-900/90 transition-all group relative">
+                        <div onclick="quickLoad('${profile.username}')" class="flex-grow cursor-pointer pr-2">
+                            <p class="font-semibold text-slate-200 group-hover:text-indigo-400 transition-colors pr-6 truncate max-w-[140px]">
+                                ${profile.name || profile.username}
+                            </p>
+                            <p class="text-xs font-mono text-slate-500 truncate max-w-[140px]">@${profile.username}</p>
+                        </div>
+                        <div class="flex items-center gap-2 z-10">
+                            <span class="text-[11px] font-semibold text-indigo-400 bg-indigo-950/50 px-2 py-0.5 rounded border border-indigo-900">
+                                ⭐ ${profile.total_stars || 0}
+                            </span>
+                            <button onclick="deleteProfile(event, '${profile.username}')" 
+                                    class="text-slate-500 hover:text-red-400 p-1.5 rounded-lg hover:bg-slate-800 transition-all">
+                                <i class="fa-solid fa-trash-can text-xs"></i>
+                            </button>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (err) {
+                console.error("History sidebar generation fault error:", err);
+                document.getElementById('historyList').innerHTML = `<p class="text-red-400 italic">Error reading database cache.</p>`;
+            }
+        }
+
+        // Main operations execution analysis pipeline block
+        async function analyzeProfile() {
+            const username = document.getElementById('usernameInput').value.trim();
+            const statusDiv = document.getElementById('statusMessage');
+            const card = document.getElementById('resultCard');
+
+            if (!username) {
+                statusDiv.className = "mt-4 text-sm text-red-400 font-medium";
+                statusDiv.innerText = "⚠️ Please fill in a valid GitHub username first.";
+                statusDiv.classList.remove('hidden');
+                return;
+            }
+
+            statusDiv.className = "mt-4 text-sm text-blue-400 font-medium animate-pulse";
+            statusDiv.innerText = `⏳ Contacting upstream pipelines for @${username}...`;
+            statusDiv.classList.remove('hidden');
+            card.classList.add('hidden');
+
+            try {
+                const response = await fetch(`/api/analyze/${username}`, { method: 'POST' });
+                const result = await response.json();
+
+                if (response.ok && result.data) {
+                    renderCard(result.data);
+                    statusDiv.className = "mt-4 text-sm text-green-400 font-medium";
+                    statusDiv.innerText = "✅ Pipeline metrics successfully synchronized and archived in MySQL!";
+                    loadSearchHistory(); 
+                } else {
+                    throw new Error(result.message || "Failed processing user request parameters.");
+                }
+            } catch (error) {
+                statusDiv.className = "mt-4 text-sm text-red-400 font-medium";
+                statusDiv.innerText = `❌ Error: ${error.message}`;
+            }
+        }
+
+        // Instant click shortcuts retrieval fetching straight from MySQL rows layer
+        async function quickLoad(username) {
+            document.getElementById('usernameInput').value = username;
+            const statusDiv = document.getElementById('statusMessage');
+            statusDiv.className = "mt-4 text-sm text-indigo-400 font-medium";
+            statusDiv.innerText = `⚡ Reading archived records for @${username} from MySQL instantly...`;
+            statusDiv.classList.remove('hidden');
+
+            try {
+                const response = await fetch(`/api/profiles/${username}`);
+                const result = await response.json();
+                const profile = result.data || result;
+                
+                if (profile && (profile.username || profile.id)) {
+                    renderCard(profile);
+                    statusDiv.className = "mt-4 text-sm text-indigo-400 font-medium";
+                    statusDiv.innerText = `🚀 Loaded cached database entry context for @${username}.`;
+                } else {
+                    throw new Error("Target dataset schema missing.");
+                }
+            } catch (err) {
+                statusDiv.className = "mt-4 text-sm text-red-400 font-medium";
+                statusDiv.innerText = `⚠️ Cache read fallthrough, launching active analysis engine...`;
+                analyzeProfile();
+            }
+        }
+
+        // Process profile wiping parameters against the back-end infrastructure endpoints
+        async function deleteProfile(event, username) {
+            event.stopPropagation(); 
+            
+            if (!confirm(`Are you sure you want to permanently delete @${username} from your local database logs?`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/profiles/${username}`, { method: 'DELETE' });
+                const result = await response.json();
+
+                if (response.ok) {
+                    const statusDiv = document.getElementById('statusMessage');
+                    statusDiv.className = "mt-4 text-sm text-amber-400 font-medium";
+                    statusDiv.innerText = `🗑️ Profile @${username} removed safely from database logs.`;
+                    statusDiv.classList.remove('hidden');
+                    
+                    if (document.getElementById('usernameInput').value === username) {
+                        document.getElementById('resultCard').classList.add('hidden');
+                        document.getElementById('usernameInput').value = '';
+                    }
+                    loadSearchHistory(); 
+                } else {
+                    alert(`Purge execution error: ${result.message}`);
+                }
+            } catch (err) {
+                console.error("Delete process drop fault:", err);
+                alert("Failed to clear file target registry data rows.");
+            }
+        }
+
+        // Render card data properties calculations with full Advanced Ranking Badge configurations
+        function renderCard(profile) {
+            const repos = profile.public_repos || 0;
+            const followers = profile.followers || 0;
+            const stars = profile.total_stars || 0;
+            
+            // Execute frontend representation matrix score calculation
+            const score = (repos * 2) + (followers * 5) + (stars * 10);
+
+            let rankTitle = 'Junior Contributor';
+            let badgeColor = 'bg-slate-700 text-slate-300 border-slate-600';
+
+            if (score >= 10 && score < 50) {
+                rankTitle = 'Advanced Full-Stack Engineer';
+                badgeColor = 'bg-blue-950/80 text-blue-400 border-blue-800';
+            } else if (score >= 50 && score < 200) {
+                rankTitle = 'Polymath Core Architect';
+                badgeColor = 'bg-purple-950/80 text-purple-400 border-purple-800';
+            } else if (score >= 200) {
+                rankTitle = 'Elite Legendary Developer 👑';
+                badgeColor = 'bg-amber-950/80 text-amber-400 border-amber-700 font-bold';
+            }
+
+            // Injects the Rank badge seamlessly beside the text title structure layout
+            document.getElementById('profileName').innerHTML = `
+                <span>${profile.name || profile.username}</span> 
+                <span class="inline-block text-[11px] font-semibold uppercase tracking-wider px-2.5 py-1 rounded-full border ${badgeColor}">
+                    ${rankTitle} (Score: ${score})
+                </span>
+            `;
+            
+            document.getElementById('profileHandle').innerText = `@${profile.username}`;
+            document.getElementById('profileBio').innerText = profile.bio || "No description provided.";
+            document.getElementById('statRepos').innerText = repos;
+            document.getElementById('statFollowers').innerText = followers;
+            document.getElementById('statFollowing').innerText = profile.following || 0;
+            document.getElementById('statStars').innerText = `⭐ ${stars}`;
+            document.getElementById('statLanguages').innerText = profile.top_languages || "None";
+            
+            document.getElementById('resultCard').classList.remove('hidden');
+        }
+    </script>
+</body>
+</html>
